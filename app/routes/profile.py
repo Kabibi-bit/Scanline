@@ -25,7 +25,7 @@ class SurveyIn(BaseModel):
 @router.post("")
 def create_profile(payload: SurveyIn, db: Session = Depends(get_db)):
     """Creates a new profile snapshot and marks it current.
-    Previous profile rows stay in the table — that history is what
+    Previous profile rows stay in the table - that history is what
     lets the chatbot later explain how a user's goals have changed.
     """
     db.query(Profile).filter(
