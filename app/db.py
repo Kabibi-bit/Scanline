@@ -1,5 +1,4 @@
-
-""Real database connection, using your Supabase Postgres URL.
+"""Real database connection, using your Supabase Postgres URL.
 Every route imports get_db() from here instead of the TODO comments
 that were in the original scaffold.
 """
@@ -23,9 +22,10 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
  
  
 def get_db():
-    """FastAPI dependency — yields a DB session, closes it after the request."""
+    """FastAPI dependency - yields a DB session, closes it after the request."""
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+ 
