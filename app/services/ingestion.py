@@ -52,7 +52,7 @@ def dedupe_listings(listings: list[dict]) -> list[dict]:
  
 async def extract_tags(description: str, anthropic_client) -> list[str]:
     """Uses Claude to pull structured skill/domain tags out of a raw
-    job description. Keep the prompt tight — this runs per-listing at scale.
+    job description. Keep the prompt tight - this runs per-listing at scale.
     """
     if not description:
         return []
