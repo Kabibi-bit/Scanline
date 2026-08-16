@@ -4,12 +4,12 @@ Note on a design change from the original spec: the schema has a
 pgvector `embedding` column for true semantic search, but that needs
 a second API account (OpenAI or Voyage) just for embeddings. To get
 you running today with only the accounts you already have, this
-version retrieves memory by recency instead of similarity — it pulls
+version retrieves memory by recency instead of similarity - it pulls
 your last N remembered facts rather than the N most *relevant* ones.
  
 That's a real trade-off: recency-based retrieval will occasionally
 surface less-relevant memories than true semantic search would. It's
-a reasonable MVP simplification, not a permanent design decision —
+a reasonable MVP simplification, not a permanent design decision -
 swap in real embeddings later by populating the `embedding` column
 and switching the query below to `.order_by(ChatMemory.embedding.cosine_distance(...))`.
 """
@@ -21,7 +21,7 @@ from app.models.db_models import ChatMemory
  
 def summarize_conversation(anthropic_client, conversation: list[dict]) -> str:
     """Compresses a conversation into 1-3 durable facts worth remembering
-    long-term — not a transcript, just what's actually worth keeping.
+    long-term - not a transcript, just what's actually worth keeping.
     """
     transcript = "\n".join(f"{m['role']}: {m['content']}" for m in conversation)
     resp = anthropic_client.messages.create(
