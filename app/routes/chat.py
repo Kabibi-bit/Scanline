@@ -1,4 +1,3 @@
-
 import os
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -82,7 +81,7 @@ def chat(payload: ChatIn, db: Session = Depends(get_db)):
     )
     reply = "".join(b.text for b in resp.content if b.type == "text")
  
-    # Summarize anything durable from this exchange and store it —
+    # Summarize anything durable from this exchange and store it -
     # this is what makes memory persist across sessions, not just within one.
     full_convo = messages + [{"role": "assistant", "content": reply}]
     summary = summarize_conversation(client, full_convo)
