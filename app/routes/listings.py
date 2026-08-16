@@ -46,7 +46,7 @@ def get_matches(user_id: str, db: Session = Depends(get_db)):
  
     listings = db.query(Listing).all()
     if not listings:
-        return {"matches": [], "note": "No listings in the database yet — run a scan first."}
+        return {"matches": [], "note": "No listings in the database yet - run a scan first."}
  
     ranked = rank_listings(
         [_listing_to_dict(l) for l in listings],
