@@ -1,12 +1,17 @@
+
 FROM python:3.12-slim
  
 WORKDIR /app
  
-# Build tools needed to install some Python packages (like the database driver)
+# Build tools needed for any packages that require them
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
+ 
+# Upgrading pip first ensures it picks pre-built packages instead of
+# trying to compile them from source
+RUN pip install --upgrade pip
  
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
