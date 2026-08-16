@@ -1,4 +1,3 @@
-
 FROM python:3.12-slim
  
 WORKDIR /app
@@ -9,8 +8,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
  
-# Upgrading pip first ensures it picks pre-built packages instead of
-# trying to compile them from source
+# Redirect Rust's build cache to a folder we know is writable,
+# since some Python packages (pydantic-core) compile via Rust
+# and were failing to write to their default system location.
+ENV CARGO_HOME=/app/.cargo
+ENV RUSTUP_HOME=/app/.rustup
+RUN mkdir -p /app/.cargo /app/.rustup
+ 
 RUN pip install --upgrade pip
  
 COPY requirements.txt .
