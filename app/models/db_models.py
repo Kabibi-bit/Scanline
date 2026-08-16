@@ -93,6 +93,14 @@ class RoadmapMilestone(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
  
  
+class ChatMemory(Base):
+    __tablename__ = "chat_memory"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    summary = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+ 
+ 
 class Application(Base):
     __tablename__ = "applications"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
