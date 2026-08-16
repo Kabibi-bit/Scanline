@@ -56,15 +56,15 @@ def explain_score(listing: dict, match: dict, profile: dict) -> str:
     goal_phrase = (profile["northstar"].split(".")[0] or "your goal").lower()
     if match["goal_match_tags"]:
         return (
-            f"Lines up with {goal_phrase} — overlaps on "
+            f"Lines up with {goal_phrase} - overlaps on "
             f"{', '.join(match['goal_match_tags'][:2])}."
         )
     if match["skill_match_tags"]:
         return (
-            f"Skills match on {', '.join(match['skill_match_tags'][:2])} — "
+            f"Skills match on {', '.join(match['skill_match_tags'][:2])} - "
             f"a reasonable stepping stone."
         )
-    return "Looser fit — worth a glance while broadening this cycle's search."
+    return "Looser fit - worth a glance while broadening this cycle's search."
  
  
 def rank_listings(listings: list[dict], profile: dict, top_n: int = 10) -> list[dict]:
