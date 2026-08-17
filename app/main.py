@@ -1,5 +1,7 @@
-from fastapi import FastAPI
+import traceback
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
  
 from app.routes import profile, listings, chat, users
@@ -9,10 +11,9 @@ load_dotenv()
  
 app = FastAPI(title="Scanline API")
  
-# Allows your Vercel-hosted frontend to call this API from the browser.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten to your real frontend URL once you have one
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -21,6 +22,21 @@ app.include_router(users.router)
 app.include_router(profile.router)
 app.include_router(listings.router)
 app.include_router(chat.router)
+ 
+ 
+# TEMPORARY DEBUG HANDLER: shows the real error directly in the API
+# response instead of only in Render's logs, so it's easy to read.
+# Remove this once things are working -- it can leak internal details.
+@app.exception_handler(Exception)
+async def debug_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error_type": type(exc).__name__,
+            "error_message": str(exc),
+            "traceback": traceback.format_exc(),
+        },
+    )
  
  
 @app.on_event("startup")
