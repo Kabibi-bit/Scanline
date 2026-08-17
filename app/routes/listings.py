@@ -57,11 +57,16 @@ def get_matches(user_id: str, db: Session = Depends(get_db)):
  
  
 @router.post("/scan/{user_id}")
-def trigger_scan(user_id: str, db: Session = Depends(get_db)):
-    """Manually triggers an immediate scan + re-scoring for one user,
-    on top of the scheduled background job that runs for everyone.
+async def trigger_scan(user_id: str, db: Session = Depends(get_db)):
+    """Manually triggers an immediate scan: pulls fresh listings from
+    Adzuna (if any are new), then re-scores everything for this user.
+    This is what actually populates the listings table on a manual
+    trigger, rather than only scoring whatever's already there.
     """
-    from app.services.scheduler import run_scan_for_user
+    from app.services.scheduler import run_scan_for_user, _pull_and_store_new_listings
+ 
+    new_count = await _pull_and_store_new_listings(db)
     result = run_scan_for_user(db, user_id)
+    result["new_listings_pulled"] = new_count
     return result
  
