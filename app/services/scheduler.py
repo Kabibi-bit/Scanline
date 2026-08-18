@@ -11,7 +11,10 @@ import anthropic
  
 from app.db import SessionLocal
 from app.models.db_models import User, Profile, Listing, MatchScore
-from app.services.ingestion import fetch_adzuna, normalize_adzuna, dedupe_listings, extract_tags
+from app.services.ingestion import (
+    fetch_adzuna, normalize_adzuna, dedupe_listings, extract_tags,
+    fetch_simplify_internships, parse_simplify_markdown,
+)
 from app.services.matching import rank_listings
  
 SCAN_INTERVAL_MINUTES = int(os.getenv("SCAN_INTERVAL_MINUTES", "1440"))  # default: once/day
@@ -42,14 +45,16 @@ def _listing_to_dict(l: Listing) -> dict:
  
  
 async def _pull_and_store_new_listings(db: Session, query: str = "internship"):
-    """Fetches real listings from Adzuna, tags them via Claude, and
-    upserts anything new into the listings table.
+    """Fetches real listings from two sources - Adzuna for jobs (tagged
+    via Claude) and SimplifyJobs for internships (tagged via free
+    keyword matching, no AI cost) - and upserts anything new.
     """
-    raw_results = await fetch_adzuna(query)
-    normalized = dedupe_listings([normalize_adzuna(r) for r in raw_results])
- 
     stored_count = 0
-    for item in normalized:
+ 
+    # Source 1: Adzuna, for jobs
+    raw_results = await fetch_adzuna(query)
+    adzuna_normalized = dedupe_listings([normalize_adzuna(r) for r in raw_results])
+    for item in adzuna_normalized:
         exists = (
             db.query(Listing)
             .filter(Listing.source == item["source"], Listing.external_id == item["external_id"])
@@ -59,18 +64,35 @@ async def _pull_and_store_new_listings(db: Session, query: str = "internship"):
             continue
         tags = await extract_tags(item["description"], anthropic_client)
         db.add(Listing(
-            source=item["source"],
-            external_id=item["external_id"],
-            title=item["title"],
-            org=item["org"],
-            type=item["type"],
-            location=item["location"],
-            description=item["description"],
-            tags=tags,
-            deadline=item["deadline"],
+            source=item["source"], external_id=item["external_id"], title=item["title"],
+            org=item["org"], type=item["type"], location=item["location"],
+            description=item["description"], tags=tags, deadline=item["deadline"],
             apply_url=item["apply_url"],
         ))
         stored_count += 1
+ 
+    # Source 2: SimplifyJobs, for internships - free, no Claude call
+    try:
+        markdown_text = await fetch_simplify_internships()
+        simplify_listings = parse_simplify_markdown(markdown_text)
+        for item in simplify_listings:
+            exists = (
+                db.query(Listing)
+                .filter(Listing.source == item["source"], Listing.external_id == item["external_id"])
+                .first()
+            )
+            if exists:
+                continue
+            db.add(Listing(
+                source=item["source"], external_id=item["external_id"], title=item["title"],
+                org=item["org"], type=item["type"], location=item["location"],
+                description=item["description"], tags=item["tags"], deadline=item["deadline"],
+                apply_url=item["apply_url"],
+            ))
+            stored_count += 1
+    except Exception as e:
+        print(f"SimplifyJobs ingestion failed (non-fatal, Adzuna results still saved): {e}")
+ 
     db.commit()
     return stored_count
  
