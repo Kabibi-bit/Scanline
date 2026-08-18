@@ -1,11 +1,15 @@
+import os
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
+import anthropic
  
 from app.db import get_db
-from app.models.db_models import Profile, Listing, MatchScore, Outcome
+from app.models.db_models import Profile, Listing, MatchScore, Outcome, RoadmapMilestone
 from app.services.matching import rank_listings, get_tag_weights_from_outcomes
+from app.services.roadmap import explain_listing_against_roadmap
  
 router = APIRouter(prefix="/listings", tags=["listings"])
+client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
  
  
 def _profile_to_dict(p: Profile) -> dict:
@@ -66,6 +70,30 @@ def get_matches(user_id: str, db: Session = Depends(get_db)):
         top_n=10,
         tag_weights=tag_weights,
     )
+ 
+    # If this user has a saved roadmap, ground the top matches' "why"
+    # in it automatically - not just tag overlap, but which stage of
+    # their actual plan this listing advances. Capped to the top 5
+    # to keep the AI cost bounded; the rest still get the free
+    # rule-based rationale that's already on every match.
+    milestones = (
+        db.query(RoadmapMilestone)
+        .filter(RoadmapMilestone.user_id == user_id)
+        .order_by(RoadmapMilestone.target_stage)
+        .all()
+    )
+    if milestones:
+        roadmap_dicts = [{"stage": m.target_stage, "title": m.title, "description": m.description} for m in milestones]
+        profile_dict = _profile_to_dict(profile)
+        for listing in ranked[:5]:
+            try:
+                listing["roadmap_explanation"] = explain_listing_against_roadmap(
+                    client, listing, roadmap_dicts, profile_dict
+                )
+            except Exception as e:
+                listing["roadmap_explanation"] = None
+                listing["roadmap_explanation_error"] = str(e)
+ 
     return {"matches": ranked, "profile_id": str(profile.id), "outcomes_considered": len(outcome_dicts)}
  
  
