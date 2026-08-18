@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
  
-from app.routes import profile, listings, chat, users, roadmap
+from app.routes import profile, listings, chat, users, roadmap, outcomes, applications, manual_listings
 from app.services.scheduler import start_scheduler
  
 load_dotenv()
@@ -23,6 +23,9 @@ app.include_router(profile.router)
 app.include_router(listings.router)
 app.include_router(chat.router)
 app.include_router(roadmap.router)
+app.include_router(outcomes.router)
+app.include_router(applications.router)
+app.include_router(manual_listings.router)
  
  
 # TEMPORARY DEBUG HANDLER: shows the real error directly in the API
