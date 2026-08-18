@@ -67,7 +67,22 @@ def explain_score(listing: dict, match: dict, profile: dict) -> str:
     return "Looser fit - worth a glance while broadening this cycle's search."
  
  
-def rank_listings(listings: list[dict], profile: dict, top_n: int = 10) -> list[dict]:
+def get_tag_weights_from_outcomes(db_outcomes: list[dict]) -> dict:
+    """Builds a simple per-tag weight adjustment from real outcome history.
+    This is a heuristic, not machine learning: tags present in listings
+    that led to interviews/offers get boosted; tags from rejections/ghosts
+    get slightly penalized. db_outcomes: [{"tags": [...], "status": "..."}]
+    """
+    weights = {}
+    for o in db_outcomes:
+        delta = {"interview": 1.5, "offer": 2.5, "applied": 0, "rejected": -1.0, "ghosted": -0.5}.get(o["status"], 0)
+        for tag in o.get("tags", []):
+            weights[tag] = weights.get(tag, 0) + delta
+    return weights
+ 
+ 
+def rank_listings(listings: list[dict], profile: dict, top_n: int = 10, tag_weights: dict | None = None) -> list[dict]:
+    tag_weights = tag_weights or {}
     scored = []
     for listing in listings:
         if listing["type"] not in profile.get("target_types", []):
@@ -75,6 +90,9 @@ def rank_listings(listings: list[dict], profile: dict, top_n: int = 10) -> list[
         match = score_listing(listing, profile)
         if match is None:
             continue
+        # Apply the outcome-based adjustment on top of the base score.
+        adjustment = sum(tag_weights.get(tag, 0) for tag in listing["tags"])
+        match["score_pct"] = max(0, min(100, round(match["score_pct"] + adjustment)))
         match["rationale"] = explain_score(listing, match, profile)
         scored.append({**listing, **match})
     scored.sort(key=lambda l: l["score_pct"], reverse=True)
