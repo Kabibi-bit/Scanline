@@ -4,6 +4,7 @@ since it has a free tier; add more sources by writing a fetch_* function
 and a matching normalize_* function, then registering both below.
 """
 import os
+import re
 import httpx
  
 ADZUNA_APP_ID = os.getenv("ADZUNA_APP_ID")
@@ -70,4 +71,95 @@ async def extract_tags(description: str, anthropic_client) -> list[str]:
     )
     text = "".join(b.text for b in resp.content if b.type == "text")
     return [t.strip() for t in text.split(",") if t.strip()]
+ 
+ 
+# ---------------------------------------------------------------------------
+# SimplifyJobs Summer Internships list - a free, community-maintained,
+# hourly-updated public data source, structured as a markdown table.
+# No Claude call needed here: tags are derived from simple keyword
+# matching against role titles, which works well for short, predictable
+# internship titles and keeps this source completely free to run.
+# ---------------------------------------------------------------------------
+ 
+SIMPLIFY_RAW_URL = "https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/dev/README.md"
+ 
+TAG_KEYWORDS = [
+    "software", "backend", "frontend", "fullstack", "full-stack", "mobile",
+    "data", "machine learning", "ai", "ml", "product", "hardware", "quant",
+    "quantitative", "research", "security", "cloud", "devops", "embedded",
+    "network", "infrastructure", "android", "ios", "web", "database",
+]
+ 
+ 
+async def fetch_simplify_internships() -> str:
+    """Returns the raw markdown text of the internship list."""
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(SIMPLIFY_RAW_URL, timeout=15)
+        resp.raise_for_status()
+        return resp.text
+ 
+ 
+def _extract_first_real_url(cell_text: str) -> str | None:
+    """Pulls the first non-image URL out of a markdown table cell
+    (the Apply column contains badge-image links; we want the actual
+    application URL, not the badge image URL)."""
+    urls = re.findall(r"\]\((https?://[^)\s]+)\)", cell_text)
+    for u in urls:
+        if "camo.githubusercontent.com" not in u:
+            return u
+    return None
+ 
+ 
+def _clean_markdown(text: str) -> str:
+    """Strips markdown link/bold/emoji syntax down to plain text."""
+    text = re.sub(r"!\[.*?\]\(.*?\)", "", text)      # images
+    text = re.sub(r"\[(.*?)\]\(.*?\)", r"\1", text)  # links -> link text
+    text = re.sub(r"[*_`]", "", text)                # bold/italic/code
+    text = re.sub(r"[🔥🎓🛂🇺🇸🔒]", "", text)             # legend emoji
+    return text.strip()
+ 
+ 
+def parse_simplify_markdown(markdown_text: str) -> list[dict]:
+    """Parses the SimplifyJobs README table into normalized listing dicts."""
+    listings = []
+    current_company = None
+    for line in markdown_text.splitlines():
+        line = line.strip()
+        if not line.startswith("|") or line.startswith("|---") or "Company" in line and "Role" in line:
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if len(cells) < 4:
+            continue
+        company_cell, role_cell, location_cell, apply_cell = cells[0], cells[1], cells[2], cells[3]
+ 
+        company = _clean_markdown(company_cell)
+        if company in ("↳", "") :
+            company = current_company
+        else:
+            current_company = company
+        if not company:
+            continue
+ 
+        role = _clean_markdown(role_cell)
+        location = _clean_markdown(location_cell)
+        apply_url = _extract_first_real_url(apply_cell)
+        if not role or not apply_url:
+            continue
+ 
+        role_lower = role.lower()
+        tags = [kw for kw in TAG_KEYWORDS if kw in role_lower] or ["internship"]
+ 
+        listings.append({
+            "source": "simplify",
+            "external_id": apply_url,  # apply URLs are effectively unique per posting
+            "title": role,
+            "org": company,
+            "type": "internship",
+            "location": location or None,
+            "description": f"{role} at {company}",
+            "tags": tags,
+            "deadline": None,  # this source doesn't publish explicit deadlines
+            "apply_url": apply_url,
+        })
+    return listings
  
