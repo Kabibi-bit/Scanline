@@ -20,6 +20,7 @@ class SurveyIn(BaseModel):
     dealbreakers: str | None = None
     location_pref: str | None = None
     target_types: list[str]
+    open_to_offers: bool = False
  
  
 @router.post("")
@@ -43,12 +44,30 @@ def create_profile(payload: SurveyIn, db: Session = Depends(get_db)):
         dealbreakers=payload.dealbreakers,
         location_pref=payload.location_pref,
         target_types=payload.target_types,
+        open_to_offers=payload.open_to_offers,
         is_current=True,
     )
     db.add(new_profile)
     db.commit()
     db.refresh(new_profile)
     return {"status": "created", "profile_id": str(new_profile.id)}
+ 
+ 
+@router.post("/{user_id}/open-to-offers")
+def set_open_to_offers(user_id: str, value: bool, db: Session = Depends(get_db)):
+    """Lets a candidate opt in/out of being visible to paying businesses,
+    without having to resubmit the whole survey.
+    """
+    profile = (
+        db.query(Profile)
+        .filter(Profile.user_id == user_id, Profile.is_current == True)  # noqa: E712
+        .first()
+    )
+    if not profile:
+        raise HTTPException(status_code=404, detail="No current profile for this user")
+    profile.open_to_offers = value
+    db.commit()
+    return {"status": "updated", "open_to_offers": value}
  
  
 @router.get("/{user_id}")
