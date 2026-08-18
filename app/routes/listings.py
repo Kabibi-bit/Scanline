@@ -2,8 +2,8 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
  
 from app.db import get_db
-from app.models.db_models import Profile, Listing, MatchScore
-from app.services.matching import rank_listings
+from app.models.db_models import Profile, Listing, MatchScore, Outcome
+from app.services.matching import rank_listings, get_tag_weights_from_outcomes
  
 router = APIRouter(prefix="/listings", tags=["listings"])
  
@@ -48,12 +48,25 @@ def get_matches(user_id: str, db: Session = Depends(get_db)):
     if not listings:
         return {"matches": [], "note": "No listings in the database yet - run a scan first."}
  
+    # Pull this user's real outcome history and let it adjust scores -
+    # this is the actual "self-correcting" piece: a heuristic, not
+    # machine learning, but grounded in real recorded results.
+    outcome_rows = db.query(Outcome).filter(Outcome.user_id == user_id).all()
+    listings_by_id = {str(l.id): l for l in listings}
+    outcome_dicts = []
+    for o in outcome_rows:
+        listing = listings_by_id.get(str(o.listing_id))
+        if listing:
+            outcome_dicts.append({"tags": listing.tags or [], "status": o.status})
+    tag_weights = get_tag_weights_from_outcomes(outcome_dicts)
+ 
     ranked = rank_listings(
         [_listing_to_dict(l) for l in listings],
         _profile_to_dict(profile),
         top_n=10,
+        tag_weights=tag_weights,
     )
-    return {"matches": ranked, "profile_id": str(profile.id)}
+    return {"matches": ranked, "profile_id": str(profile.id), "outcomes_considered": len(outcome_dicts)}
  
  
 @router.post("/scan/{user_id}")
