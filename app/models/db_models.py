@@ -159,3 +159,11 @@ class CandidateAccessPurchase(Base):
     expires_at = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
  
+ 
+class BusinessHire(Base):
+    __tablename__ = "business_hires"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    business_id = Column(UUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"))
+    status = Column(String, nullable=False)  # contacted / interviewing / hired / passed
+    created_at = Column(DateTime, default=datetime.utcnow)
+ 
