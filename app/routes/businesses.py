@@ -19,7 +19,7 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
  
 from app.db import get_db
-from app.models.db_models import Business, CandidateAccessPurchase, Profile
+from app.models.db_models import Business, CandidateAccessPurchase, Profile, BusinessHire
  
 router = APIRouter(prefix="/businesses", tags=["businesses"])
  
@@ -134,4 +134,38 @@ def get_candidates(business_id: str, db: Session = Depends(get_db)):
         }
         for c in candidates
     ]
+ 
+ 
+VALID_HIRE_STATUSES = {"contacted", "interviewing", "hired", "passed"}
+ 
+ 
+class HireLogIn(BaseModel):
+    business_id: str
+    status: str
+ 
+ 
+@router.post("/hires")
+def log_hire_status(payload: HireLogIn, db: Session = Depends(get_db)):
+    """Records a real pipeline event (contacted a candidate, moved to
+    interview, hired, or passed) - this is what backs the dashboard's
+    hiring donut chart and monthly target chart with real data.
+    """
+    if payload.status not in VALID_HIRE_STATUSES:
+        raise HTTPException(status_code=400, detail=f"status must be one of {VALID_HIRE_STATUSES}")
+    hire = BusinessHire(business_id=payload.business_id, status=payload.status)
+    db.add(hire)
+    db.commit()
+    return {"status": "logged", "hire_status": payload.status}
+ 
+ 
+@router.get("/{business_id}/hires/stats")
+def get_hire_stats(business_id: str, db: Session = Depends(get_db)):
+    rows = db.query(BusinessHire).filter(BusinessHire.business_id == business_id).all()
+    by_status = {}
+    by_month = {}
+    for r in rows:
+        by_status[r.status] = by_status.get(r.status, 0) + 1
+        month_key = r.created_at.strftime("%b")
+        by_month[month_key] = by_month.get(month_key, 0) + 1
+    return {"total": len(rows), "by_status": by_status, "by_month": by_month}
  
