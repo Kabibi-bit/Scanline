@@ -111,3 +111,45 @@ def get_profile_history(user_id: str, db: Session = Depends(get_db)):
         for p in profiles
     ]
  
+ 
+@router.get("/{user_id}/potential-score")
+def get_potential_score(user_id: str, db: Session = Depends(get_db)):
+    """Server-side version of the frontend's 'Career potential' gauge -
+    same formula (roadmap progress + skill coverage + match quality),
+    computed from real stored data instead of client-side localStorage,
+    so the number is trustworthy even if someone inspects the API directly.
+    """
+    from app.models.db_models import RoadmapMilestone, MatchScore
+    import re
+ 
+    profile = (
+        db.query(Profile)
+        .filter(Profile.user_id == user_id, Profile.is_current == True)  # noqa: E712
+        .first()
+    )
+    if not profile:
+        raise HTTPException(status_code=404, detail="No current profile for this user")
+ 
+    milestones = db.query(RoadmapMilestone).filter(RoadmapMilestone.user_id == user_id).all()
+    roadmap_progress = round((1 / len(milestones)) * 100) if milestones else 0
+ 
+    skill_tokens = re.findall(r"[a-z][a-z\-]{2,}", (profile.skills or "").lower())
+    skill_strength = min(100, len(skill_tokens) * 8)
+ 
+    recent_scores = (
+        db.query(MatchScore.score_pct)
+        .filter(MatchScore.user_id == user_id)
+        .order_by(desc(MatchScore.created_at))
+        .limit(10)
+        .all()
+    )
+    match_quality = round(sum(s[0] for s in recent_scores) / len(recent_scores)) if recent_scores else 40
+ 
+    potential = round((roadmap_progress * 0.3) + (skill_strength * 0.3) + (float(match_quality) * 0.4))
+    return {
+        "potential_score": min(100, potential),
+        "roadmap_progress": roadmap_progress,
+        "skill_strength": skill_strength,
+        "match_quality": match_quality,
+    }
+ 
