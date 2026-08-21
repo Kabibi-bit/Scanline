@@ -19,6 +19,7 @@ class User(Base):
     __tablename__ = "users"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String, unique=True, nullable=False)
+    role = Column(String, nullable=False, default="candidate")  # candidate / business / tutor
     created_at = Column(DateTime, default=datetime.utcnow)
  
     profiles = relationship("Profile", back_populates="user")
@@ -165,5 +166,24 @@ class BusinessHire(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     business_id = Column(UUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"))
     status = Column(String, nullable=False)  # contacted / interviewing / hired / passed
+    created_at = Column(DateTime, default=datetime.utcnow)
+ 
+ 
+class SavedListing(Base):
+    __tablename__ = "saved_listings"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    listing_id = Column(UUID(as_uuid=True), ForeignKey("listings.id", ondelete="CASCADE"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+ 
+ 
+class Notification(Base):
+    __tablename__ = "notifications"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    type = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    detail = Column(Text)
+    is_read = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
  
