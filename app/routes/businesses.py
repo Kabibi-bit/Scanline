@@ -169,3 +169,40 @@ def get_hire_stats(business_id: str, db: Session = Depends(get_db)):
         by_month[month_key] = by_month.get(month_key, 0) + 1
     return {"total": len(rows), "by_status": by_status, "by_month": by_month}
  
+ 
+@router.get("/{business_id}/pipeline-score")
+def get_pipeline_score(business_id: str, db: Session = Depends(get_db)):
+    """Server-side version of the frontend's 'Pipeline strength' gauge -
+    same formula (active access + candidate pool size + hire rate).
+    """
+    from datetime import datetime
+ 
+    business = db.query(Business).filter(Business.id == business_id).first()
+    if not business:
+        raise HTTPException(status_code=404, detail="Business not found")
+ 
+    now = datetime.utcnow()
+    active = (
+        db.query(CandidateAccessPurchase)
+        .filter(
+            CandidateAccessPurchase.business_id == business_id,
+            CandidateAccessPurchase.payment_status == "paid",
+            CandidateAccessPurchase.expires_at > now,
+        )
+        .first()
+        is not None
+    )
+    candidate_pool = db.query(Profile).filter(Profile.is_current == True, Profile.open_to_offers == True).count()  # noqa: E712
+ 
+    hires = db.query(BusinessHire).filter(BusinessHire.business_id == business_id).all()
+    hire_count = len([h for h in hires if h.status == "hired"])
+    hire_rate = round((hire_count / len(hires)) * 100) if hires else 0
+ 
+    pipeline_score = round((40 if active else 10) + min(30, candidate_pool * 7) + (hire_rate * 0.3))
+    return {
+        "pipeline_score": min(100, pipeline_score),
+        "access_active": active,
+        "candidate_pool_size": candidate_pool,
+        "hire_rate": hire_rate,
+    }
+ 
