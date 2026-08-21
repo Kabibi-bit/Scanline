@@ -1,4 +1,4 @@
-"""Tutor marketplace: public application, admin approval (quality
+""Tutor marketplace: public application, admin approval (quality
 gate), search by skill, and students requesting a tutor for a
 specific skill gap identified by their roadmap/matching results.
  
@@ -131,4 +131,38 @@ def request_tutor(payload: RequestTutorIn, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(req)
     return {"status": "requested", "request_id": str(req.id), "note": "No messaging/scheduling system yet - this just records the request. You'd need to follow up with the tutor's email directly for now."}
+ 
+ 
+VALID_SESSION_STATUSES = {"accepted", "declined", "completed", "cancelled", "no_show"}
+ 
+ 
+class SessionStatusIn(BaseModel):
+    status: str
+ 
+ 
+@router.post("/requests/{request_id}/status")
+def update_session_status(request_id: str, payload: SessionStatusIn, db: Session = Depends(get_db)):
+    """Marks a tutoring session's real outcome - this is what backs
+    the tutor dashboard's session donut and monthly target charts.
+    """
+    if payload.status not in VALID_SESSION_STATUSES:
+        raise HTTPException(status_code=400, detail=f"status must be one of {VALID_SESSION_STATUSES}")
+    req = db.query(TutorRequest).filter(TutorRequest.id == request_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    req.status = payload.status
+    db.commit()
+    return {"status": "updated", "new_status": payload.status}
+ 
+ 
+@router.get("/{tutor_id}/sessions/stats")
+def get_session_stats(tutor_id: str, db: Session = Depends(get_db)):
+    rows = db.query(TutorRequest).filter(TutorRequest.tutor_id == tutor_id).all()
+    by_status = {}
+    by_month = {}
+    for r in rows:
+        by_status[r.status] = by_status.get(r.status, 0) + 1
+        month_key = r.created_at.strftime("%b")
+        by_month[month_key] = by_month.get(month_key, 0) + 1
+    return {"total": len(rows), "by_status": by_status, "by_month": by_month}
  
