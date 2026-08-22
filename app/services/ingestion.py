@@ -163,3 +163,69 @@ def parse_simplify_markdown(markdown_text: str) -> list[dict]:
         })
     return listings
  
+ 
+# ---------------------------------------------------------------------------
+# ScholarshipAPI - college/fellowship data source.
+# Honest limitation: as of this writing, ScholarshipAPI only covers
+# Australia and New Zealand universities. It will return real, live
+# data - just not US-specific results yet. Kept here so it's ready
+# to use for AU/NZ users now, or the moment US coverage goes live.
+# Requires a free API key from scholarshipapi.com (SCHOLARSHIP_API_KEY).
+# ---------------------------------------------------------------------------
+ 
+SCHOLARSHIP_API_KEY = os.getenv("SCHOLARSHIP_API_KEY")
+SCHOLARSHIP_API_URL = "https://api.scholarshipapi.com/v1/search"
+ 
+ 
+async def fetch_scholarships(query: str = "scholarship", limit: int = 20) -> list[dict]:
+    if not SCHOLARSHIP_API_KEY:
+        return []
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            SCHOLARSHIP_API_URL,
+            headers={
+                "Authorization": f"Bearer {SCHOLARSHIP_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={"q": query, "limit": limit},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        return resp.json().get("hits", [])
+ 
+ 
+def normalize_scholarship(raw: dict) -> dict:
+    """Maps a ScholarshipAPI hit to Scanline's canonical listing shape.
+    NOTE: the public docs snippet did not show an explicit apply-URL
+    field, so this checks a few likely field names and falls back to
+    None if none are present - verify against a real response once
+    you have an API key, and adjust the field name here if needed.
+    """
+    close_date_ms = raw.get("closeDate")
+    deadline = None
+    if close_date_ms:
+        from datetime import datetime
+        deadline = datetime.utcfromtimestamp(close_date_ms / 1000).date()
+ 
+    university = raw.get("university", "")
+    location = university.split("/")[0].upper() if "/" in university else university
+ 
+    category = raw.get("primaryCategory")
+    tags = [category.lower()] if category else ["scholarship"]
+ 
+    apply_url = raw.get("url") or raw.get("applyUrl") or raw.get("link")
+ 
+    name = raw.get("name", "Untitled scholarship")
+    return {
+        "source": "scholarshipapi",
+        "external_id": f"{name}-{university}",
+        "title": name,
+        "org": university or "Unknown institution",
+        "type": "college",
+        "location": location or None,
+        "description": raw.get("summary", "") or name,
+        "tags": tags,
+        "deadline": deadline,
+        "apply_url": apply_url or "https://scholarshipapi.com",  # honest fallback, see note above
+    }
+ 
